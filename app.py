@@ -17,6 +17,14 @@ st.set_page_config(
 # 카카오 API 키
 KAKAO_API_KEY = "5d4c572b337634c65d1d65fc68519085"
 
+# 세션 상태 초기화
+if 'test_completed' not in st.session_state:
+    st.session_state.test_completed = False
+if 'full_processing' not in st.session_state:
+    st.session_state.full_processing = False
+if 'processed_data' not in st.session_state:
+    st.session_state.processed_data = None
+
 def geocode_kakao(address):
     """카카오 API를 사용한 지오코딩"""
     if not address:
@@ -39,7 +47,7 @@ def geocode_kakao(address):
         return None, None
 
 def detect_separator(file_content):
-    """파일 구분자 자동 감지 (개선 버전)"""
+    """파일 구분자 자동 감지"""
     if isinstance(file_content, bytes):
         try:
             text_content = file_content.decode('utf-8')
@@ -92,24 +100,20 @@ def find_address_column(df):
 
 def create_map(df_result, address_col):
     """인터랙티브 지도 생성"""
-    # 성공적으로 변환된 데이터만 필터링
     map_data = df_result.dropna(subset=['위도', '경도'])
     
     if len(map_data) == 0:
         return None
     
-    # 지도 중심점 계산 (한국 중심 기본값)
     center_lat = map_data['위도'].mean() if len(map_data) > 0 else 37.5665
     center_lon = map_data['경도'].mean() if len(map_data) > 0 else 126.9780
     
-    # 무채색 지도 스타일로 지도 생성
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=8,
         tiles=None
     )
     
-    # 무채색 타일 추가 (CartoDB Positron - 깔끔한 무채색 스타일)
     folium.TileLayer(
         tiles='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
         attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -118,7 +122,6 @@ def create_map(df_result, address_col):
         control=True
     ).add_to(m)
     
-    # 점 마커 추가
     for idx, row in map_data.iterrows():
         folium.CircleMarker(
             location=[row['위도'], row['경도']],
@@ -186,7 +189,11 @@ if uploaded_file is not None:
         if address_col:
             st.success(f"'{address_col}' 칼럼을 주소로 인식했습니다.")
             
+            # 테스트 실행 버튼
             if st.button("🧪 테스트 실행 (처음 5개)", type="primary"):
+                st.session_state.test_completed = False
+                st.session_state.full_processing = False
+                
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
@@ -214,35 +221,70 @@ if uploaded_file is not None:
                 success_rate = len([r for r in test_results if r['위도']]) / len(test_results) * 100
                 st.metric("테스트 성공률", f"{success_rate:.1f}%")
                 
+                # 테스트 완료 상태 설정
+                st.session_state.test_completed = True
+                st.session_state.test_data = df
+                st.session_state.address_col = address_col
+                
                 st.markdown("---")
                 st.subheader("💡 테스트 완료!")
                 st.info(f"전체 {len(df)}개 주소 처리 예상 시간: 약 {len(df)*0.1/60:.1f}분")
+            
+            # 테스트 완료 후 전체 처리 버튼 표시
+            if st.session_state.test_completed:
+                st.markdown("### 🚀 전체 데이터 처리")
                 
-                if st.button("🚀 전체 데이터 처리하기", type="secondary"):
+                # 전체 처리 버튼 (별도 영역에 배치)
+                full_process_btn = st.button(
+                    "🚀 전체 데이터 처리 시작", 
+                    type="secondary",
+                    key="full_process_button",
+                    help="테스트가 완료된 후 전체 데이터를 처리합니다."
+                )
+                
+                if full_process_btn:
+                    st.session_state.full_processing = True
+                
+                # 전체 처리 실행
+                if st.session_state.full_processing:
+                    df = st.session_state.test_data
+                    address_col = st.session_state.address_col
+                    
+                    st.markdown("### 📊 전체 데이터 처리 중...")
+                    
                     df_result = df.copy()
                     df_result['위도'] = None
                     df_result['경도'] = None
                     
+                    # 진행률 표시를 위한 컨테이너
+                    progress_container = st.container()
+                    with progress_container:
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                    
                     success_count = 0
                     
-                    with st.spinner('전체 데이터 처리 중...'):
-                        for idx in range(len(df)):
-                            address = df.iloc[idx][address_col]
-                            if pd.notna(address):
-                                if idx % 50 == 0 or idx < 10:
-                                    status_text.text(f"처리 중 {idx+1}/{len(df)}: {str(address)[:30]}...")
-                                
-                                lat, lon = geocode_kakao(str(address))
-                                df_result.at[idx, '위도'] = lat
-                                df_result.at[idx, '경도'] = lon
-                                
-                                if lat:
-                                    success_count += 1
-                                
-                                progress_bar.progress((idx + 1) / len(df))
-                                time.sleep(0.05)
+                    # 전체 데이터 처리
+                    for idx in range(len(df)):
+                        address = df.iloc[idx][address_col]
+                        if pd.notna(address):
+                            if idx % 50 == 0 or idx < 10:
+                                status_text.text(f"처리 중 {idx+1}/{len(df)}: {str(address)[:30]}...")
+                            
+                            lat, lon = geocode_kakao(str(address))
+                            df_result.at[idx, '위도'] = lat
+                            df_result.at[idx, '경도'] = lon
+                            
+                            if lat:
+                                success_count += 1
+                            
+                            progress_bar.progress((idx + 1) / len(df))
+                            time.sleep(0.05)
                     
                     status_text.text(f"✅ 완료! {success_count}/{len(df)}개 성공 ({success_count/len(df)*100:.1f}%)")
+                    
+                    # 결과 저장
+                    st.session_state.processed_data = df_result
                     
                     # === 🗺️ 지도와 표를 나란히 배치 ===
                     st.markdown("---")
@@ -301,9 +343,9 @@ if uploaded_file is not None:
                         
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.metric("성공", success_count, delta=None)
+                            st.metric("성공", success_count)
                         with col2:
-                            st.metric("실패", fail_count, delta=None)
+                            st.metric("실패", fail_count)
                         
                         st.metric("성공률", f"{success_count/total_count*100:.1f}%")
                         
@@ -346,12 +388,6 @@ with st.expander("📖 사용 방법"):
     - **깔끔한 무채색 스타일**: 지역 경계와 도시 라벨만 표시
     - **대화형 마커**: 클릭하면 상세 주소와 좌표 정보 표시
     - **자동 중심점**: 데이터 범위에 맞게 지도 중심 자동 조정
-    - **확대/축소**: 마우스 휠로 자유로운 확대/축소
-    
-    ### 📝 지원 파일 형식
-    - CSV (쉼표 구분): `file.csv`
-    - TSV (탭 구분): `file.tsv` 또는 `file.csv`
-    - 인코딩: UTF-8, EUC-KR, CP949 자동 감지
     """)
 
 st.markdown("---")
