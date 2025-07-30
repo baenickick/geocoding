@@ -192,7 +192,7 @@ def create_dark_minimal_map(df_result, address_col):
 
 # 메인 앱
 st.title("📍 주소 → 위도/경도 변환기")
-st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 **어두운 톤 미니멀 지도**에 시각화해드립니다!")
+st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 시각화해드립니다! ʢᴗ.ᴗʡ ")
 
 uploaded_file = st.file_uploader("CSV 파일을 업로드하세요", type=['csv'])
 
@@ -427,13 +427,7 @@ with st.expander("📖 사용 방법"):
     - **실시간 진행률**: 처리 상황 실시간 확인
     - **즉시 다운로드**: 변환 완료 후 바로 CSV 다운로드
     
-    ### 🌃 다크 테마 지도 특징
-    - **CartoDB Dark Matter**: 라벨 없는 극도로 미니멀한 어두운 스타일
-    - **대화형 마커**: 클릭하면 상세 주소와 좌표 정보 표시
-    - **전문적인 외관**: 도시 브랜딩 프레젠테이션에 최적화
-    - **눈의 피로감 감소**: 어두운 톤으로 장시간 작업 시 편안함
     """)
 
 st.markdown("---")
-st.markdown("🏙️ **도시 브랜딩 및 개발 프로젝트를 위한 위치 데이터 변환 및 시각화 도구**")
 st.markdown("by baenickick ʢᴗ.ᴗʡ | Powered by Kakao API, Streamlit & Folium")
