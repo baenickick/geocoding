@@ -25,13 +25,6 @@ h1,h2,h3,h4,h5,h6{font-weight:700!important}
     border: 1px solid #444;
     backdrop-filter: blur(10px);
 }
-
-/* 컬럼 높이 맞춤 */
-.main-container {
-    height: 700px;
-    display: flex;
-    align-items: stretch;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -245,7 +238,7 @@ if up:
         st.markdown("---")
         st.subheader("📊 최종 결과 - 어두운 톤 미니멀 지도 & 데이터")
         
-        # 컬럼 레이아웃 - 높이 맞춤
+        # 컬럼 레이아웃
         col_map, col_table = st.columns([2, 1], gap="small")
         
         with col_map:
@@ -317,7 +310,7 @@ if up:
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # 지도 표시 - 높이 고정
+            # 지도 표시
             if st.session_state.map_obj:
                 st_folium(st.session_state.map_obj, height=600, width=None, returned_objects=[], key="main_map")
                 
@@ -364,41 +357,75 @@ if up:
                     use_container_width=True
                 )
             
-            # 결과 테이블 - 높이를 지도와 맞춤 (600px - 다운로드 버튼 공간)
+            # 결과 테이블 - 높이를 반으로 줄임 (280px)
             result_display = result[[addr_c, '위도', '경도']].copy()
             result_display.columns = ['주소', '위도', '경도']
             result_display['주소'] = result_display['주소'].astype(str).str[:25] + "..."
             
-            # 테이블 높이를 지도 높이에 맞춤
             st.dataframe(
                 result_display,
-                height=400,  # 지도(600px) - 다운로드 버튼 영역(약 200px) = 400px
+                height=280,  # 높이를 280px로 줄임
                 use_container_width=True
             )
             
-            # 통계 정보를 컴팩트하게
+            # ═══════════════════════════════════════════════════════════
+            # 📈 변환 통계 섹션 - 높이를 늘려서 위 테이블과 균등하게 맞춤
+            # ═══════════════════════════════════════════════════════════
+            
             st.markdown("### 📈 변환 통계")
+            
+            # 통계 정보
             total_count = len(result)
             success_count = result['위도'].notna().sum()
             fail_count = total_count - success_count
             
-            # 한 줄에 모든 통계 표시
-            stat_col1, stat_col2, stat_col3 = st.columns(3)
-            with stat_col1:
+            # 메트릭들을 세로로 배치해서 공간 활용
+            col_stat1, col_stat2, col_stat3 = st.columns(3)
+            with col_stat1:
                 st.metric("성공", success_count, delta=None)
-            with stat_col2:
-                st.metric("실패", fail_count, delta=None)
-            with stat_col3:
+            with col_stat2:
+                st.metric("실패", fail_count, delta=None)  
+            with col_stat3:
                 st.metric("성공률", f"{success_count/total_count*100:.1f}%", delta=None)
             
-            # 실패한 주소 목록 - 간소화
+            # 구분선
+            st.markdown("---")
+            
+            # 성공/실패 비율을 프로그레스 바로 시각화
+            if total_count > 0:
+                success_ratio = success_count / total_count
+                st.markdown("**처리 현황**")
+                st.progress(success_ratio)
+                st.caption(f"전체 {total_count}개 중 {success_count}개 성공 ({success_ratio*100:.1f}%)")
+            
+            # 실패한 주소 목록 - 확장하여 공간 채우기
             failed_addresses = result[result['위도'].isna()]
             if len(failed_addresses) > 0:
-                with st.expander(f"❌ 변환 실패 주소 ({len(failed_addresses)}개)", expanded=False):
-                    for idx, row in failed_addresses.head(3).iterrows():
-                        st.text(f"• {str(row[addr_c])[:30]}")
-                    if len(failed_addresses) > 3:
-                        st.text(f"... 외 {len(failed_addresses)-3}개 더")
+                st.markdown("**❌ 변환 실패 주소**")
+                with st.expander(f"실패한 주소 {len(failed_addresses)}개 보기", expanded=False):
+                    # 실패 주소를 더 많이 표시
+                    for idx, row in failed_addresses.head(6).iterrows():
+                        st.text(f"• {str(row[addr_c])[:35]}")
+                    if len(failed_addresses) > 6:
+                        st.text(f"... 외 {len(failed_addresses)-6}개 더")
+            else:
+                st.success("🎉 모든 주소가 성공적으로 변환되었습니다!")
+            
+            # 추가 정보로 공간 채우기
+            st.markdown("---")
+            st.markdown("**💡 변환 정보**")
+            
+            # 좌표 범위 정보
+            valid_coords = result.dropna(subset=['위도', '경도'])
+            if len(valid_coords) > 0:
+                lat_range = f"{valid_coords['위도'].min():.4f} ~ {valid_coords['위도'].max():.4f}"
+                lon_range = f"{valid_coords['경도'].min():.4f} ~ {valid_coords['경도'].max():.4f}"
+                
+                info_col1, info_col2 = st.columns(2)
+                with info_col1:
+                    st.caption(f"**위도 범위**  \n{lat_range}")
+                with info_col2:
+                    st.caption(f"**경도 범위**  \n{lon_range}")
 
 # 사용법 안내
 with st.expander("📖 사용 방법"):
@@ -419,3 +446,4 @@ with st.expander("📖 사용 방법"):
 
 st.markdown("---")
 st.markdown("by baenickick ʢᴗ.ᴗʡ | Powered by Kakao API, Streamlit & Folium")
+
