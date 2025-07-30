@@ -4,11 +4,8 @@ import requests
 import time
 import io
 import csv
-from streamlit_keplergl import keplergl_static
-from keplergl import KeplerGl
-
-pip install streamlit-keplergl keplergl
-
+import folium
+from streamlit_folium import st_folium
 
 # 페이지 설정
 st.set_page_config(
@@ -52,11 +49,6 @@ st.markdown("""
     .stColumn > div {
         padding: 0 !important;
     }
-    
-    iframe[title="streamlit_keplergl.keplergl_static"] {
-        width: 100% !important;
-        height: 600px !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,8 +62,8 @@ if 'full_processing' not in st.session_state:
     st.session_state.full_processing = False
 if 'processed_data' not in st.session_state:
     st.session_state.processed_data = None
-if 'kepler_map' not in st.session_state:
-    st.session_state.kepler_map = None
+if 'dark_map' not in st.session_state:
+    st.session_state.dark_map = None
 
 def geocode_kakao(address):
     """카카오 API를 사용한 지오코딩"""
@@ -146,87 +138,61 @@ def find_address_column(df):
     
     return None
 
-def create_kepler_map(df_result, address_col):
-    """Kepler.gl 지도 생성 (미니멀 스타일)"""
-    map_data = df_result.dropna(subset=['위도', '경도']).copy()
+def create_dark_minimal_map(df_result, address_col):
+    """어두운 톤의 미니멀 지도 생성"""
+    map_data = df_result.dropna(subset=['위도', '경도'])
     
     if len(map_data) == 0:
         return None
     
-    config = {
-        "version": "v1",
-        "config": {
-            "mapState": {
-                "bearing": 0,
-                "dragRotate": False,
-                "latitude": map_data['위도'].mean(),
-                "longitude": map_data['경도'].mean(),
-                "pitch": 0,
-                "zoom": 7,
-                "isSplit": False
-            },
-            "mapStyle": {
-                "styleType": "light",
-                "topLayerGroups": {},
-                "visibleLayerGroups": {
-                    "label": False,
-                    "road": True,
-                    "border": True,
-                    "building": False,
-                    "water": True,
-                    "land": True,
-                    "3d building": False
-                }
-            },
-            "visState": {
-                "filters": [],
-                "layers": [
-                    {
-                        "id": "location_points",
-                        "type": "point",
-                        "config": {
-                            "dataId": "locations",
-                            "label": "위치",
-                            "color": [255, 87, 87],
-                            "columns": {
-                                "lat": "위도",
-                                "lng": "경도"
-                            },
-                            "isVisible": True,
-                            "visConfig": {
-                                "radius": 8,
-                                "opacity": 0.8,
-                                "outline": False,
-                                "thickness": 2,
-                                "filled": True
-                            }
-                        }
-                    }
-                ],
-                "interactionConfig": {
-                    "tooltip": {
-                        "fieldsToShow": {
-                            "locations": [
-                                {"name": address_col, "format": None},
-                                {"name": "위도", "format": None},
-                                {"name": "경도", "format": None}
-                            ]
-                        },
-                        "enabled": True
-                    }
-                }
-            }
-        }
-    }
+    center_lat = map_data['위도'].mean() if len(map_data) > 0 else 37.5665
+    center_lon = map_data['경도'].mean() if len(map_data) > 0 else 126.9780
     
-    kepler_map = KeplerGl(height=600, config=config)
-    kepler_map.add_data(data=map_data, name="locations")
+    # 어두운 톤의 미니멀 지도 생성
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=7,
+        tiles=None,
+        zoom_control=True,
+        scrollWheelZoom=True,
+        dragging=True,
+        attribution_control=False
+    )
     
-    return kepler_map
+    # CartoDB Dark Matter (No Labels) - 가장 미니멀하고 세련된 어두운 톤
+    folium.TileLayer(
+        tiles='https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        name="Dark Minimal",
+        overlay=False,
+        control=False
+    ).add_to(m)
+    
+    # 붉은색 원형 마커 추가 (어두운 배경에 잘 보이도록 조정)
+    for idx, row in map_data.iterrows():
+        folium.CircleMarker(
+            location=[row['위도'], row['경도']],
+            radius=6,
+            popup=folium.Popup(
+                f"<div style='font-family: NanumSquareAc, sans-serif; font-size: 12px; color: #333;'>"
+                f"<b>{str(row[address_col])[:40]}</b><br>"
+                f"위도: {row['위도']:.6f}<br>"
+                f"경도: {row['경도']:.6f}</div>",
+                max_width=200
+            ),
+            tooltip=f"{str(row[address_col])[:25]}...",
+            color='#FF6B6B',  # 밝은 붉은 테두리 (어두운 배경에 잘 보임)
+            fill=True,
+            fillColor='#FF4757',  # 밝은 붉은 채우기
+            fillOpacity=0.9,  # 불투명도 높임
+            weight=2
+        ).add_to(m)
+    
+    return m
 
 # 메인 앱
 st.title("📍 주소 → 위도/경도 변환기")
-st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 지도에 시각화해드립니다!")
+st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 **어두운 톤 미니멀 지도**에 시각화해드립니다!")
 
 uploaded_file = st.file_uploader("CSV 파일을 업로드하세요", type=['csv'])
 
@@ -277,7 +243,7 @@ if uploaded_file is not None:
                 st.session_state.test_completed = False
                 st.session_state.full_processing = False
                 st.session_state.processed_data = None
-                st.session_state.kepler_map = None
+                st.session_state.dark_map = None
                 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -362,31 +328,31 @@ if uploaded_file is not None:
                     
                     st.session_state.processed_data = df_result
                     st.session_state.address_col = address_col
-                    st.session_state.kepler_map = create_kepler_map(df_result, address_col)
+                    st.session_state.dark_map = create_dark_minimal_map(df_result, address_col)
                 
                 if st.session_state.processed_data is not None:
                     df_result = st.session_state.processed_data
                     address_col = st.session_state.address_col
                     
                     st.markdown("---")
-                    st.subheader("📊 최종 결과 - 지도 시각화 및 데이터")
+                    st.subheader("📊 최종 결과 - 어두운 톤 미니멀 지도 & 데이터")
                     
                     col_map, col_table = st.columns([2, 1], gap="small")
                     
                     with col_map:
-                        st.markdown("### 🗺️ 위치 지도")
+                        st.markdown("### 🌃 위치 지도 (Dark Theme)")
                         
-                        if st.session_state.kepler_map:
-                            keplergl_static(
-                                st.session_state.kepler_map,
+                        if st.session_state.dark_map:
+                            st_folium(
+                                st.session_state.dark_map,
+                                width=None,  # 컨테이너 너비에 맞춤
                                 height=600,
-                                width=None,
-                                center_map=False,
-                                read_only=False
+                                returned_objects=[],  # 상호작용 데이터 반환 비활성화
+                                key="dark_map"
                             )
                             
                             successful_locations = df_result.dropna(subset=['위도', '경도'])
-                            st.info(f"📍 지도에 표시된 위치: {len(successful_locations)}개")
+                            st.info(f"🔴 지도에 표시된 위치: {len(successful_locations)}개")
                         else:
                             st.warning("표시할 위치 데이터가 없습니다.")
                     
@@ -456,12 +422,18 @@ with st.expander("📖 사용 방법"):
     ### ✨ 주요 기능
     - **자동 구분자 감지**: 탭, 쉼표 등 자동 인식
     - **주소 칼럼 자동 찾기**: '주소', 'address' 등 자동 탐지
-    - **Kepler.gl 지도**: GPU 가속 고성능 인터랙티브 지도
-    - **미니멀 라이트 스타일**: 도로와 경계선만 표시하는 깔끔한 스타일
+    - **어두운 톤 미니멀 지도**: 도로와 경계선만 표시하는 세련된 다크 테마
+    - **밝은 붉은 마커**: 어두운 배경에 잘 보이는 색상 조합
     - **실시간 진행률**: 처리 상황 실시간 확인
     - **즉시 다운로드**: 변환 완료 후 바로 CSV 다운로드
+    
+    ### 🌃 다크 테마 지도 특징
+    - **CartoDB Dark Matter**: 라벨 없는 극도로 미니멀한 어두운 스타일
+    - **대화형 마커**: 클릭하면 상세 주소와 좌표 정보 표시
+    - **전문적인 외관**: 도시 브랜딩 프레젠테이션에 최적화
+    - **눈의 피로감 감소**: 어두운 톤으로 장시간 작업 시 편안함
     """)
 
 st.markdown("---")
 st.markdown("🏙️ **도시 브랜딩 및 개발 프로젝트를 위한 위치 데이터 변환 및 시각화 도구**")
-st.markdown("by Urban Designer | Powered by Kakao API, Streamlit & Kepler.gl")
+st.markdown("by Urban Designer | Powered by Kakao API, Streamlit & Folium (Dark Theme)")
