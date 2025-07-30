@@ -27,50 +27,29 @@ st.markdown("""
         font-family: 'NanumSquareAc', sans-serif !important;
     }
     
-    /* 제목과 헤더 폰트 */
     h1, h2, h3, h4, h5, h6 {
         font-family: 'NanumSquareAc', sans-serif !important;
         font-weight: 700 !important;
     }
     
-    /* 버튼 폰트 */
     .stButton > button {
         font-family: 'NanumSquareAc', sans-serif !important;
         font-weight: 600 !important;
     }
     
-    /* 데이터프레임 폰트 */
     .dataframe {
         font-family: 'NanumSquareAc', sans-serif !important;
     }
     
-    /* 메트릭 폰트 */
-    .metric-container {
-        font-family: 'NanumSquareAc', sans-serif !important;
-    }
-    
-    /* 텍스트 입력 폰트 */
-    .stTextInput > div > div > input {
-        font-family: 'NanumSquareAc', sans-serif !important;
-    }
-    
-    /* 선택박스 폰트 */
-    .stSelectbox > div > div > div {
-        font-family: 'NanumSquareAc', sans-serif !important;
-    }
-    
-    /* 컬럼 간격 조정 */
     .block-container {
         padding-left: 1rem;
         padding-right: 1rem;
     }
     
-    /* 지도 컨테이너 크기 조정 */
     .stColumn > div {
         padding: 0 !important;
     }
     
-    /* Kepler.gl 컨테이너 크기 맞춤 */
     iframe[title="streamlit_keplergl.keplergl_static"] {
         width: 100% !important;
         height: 600px !important;
@@ -171,7 +150,6 @@ def create_kepler_map(df_result, address_col):
     if len(map_data) == 0:
         return None
     
-    # Kepler.gl 설정 (Light 스타일)
     config = {
         "version": "v1",
         "config": {
@@ -185,19 +163,17 @@ def create_kepler_map(df_result, address_col):
                 "isSplit": False
             },
             "mapStyle": {
-                "styleType": "light",  # 미니멀한 라이트 스타일[20][23]
+                "styleType": "light",
                 "topLayerGroups": {},
                 "visibleLayerGroups": {
-                    "label": False,      # 라벨 숨김
-                    "road": True,        # 도로 표시
-                    "border": True,      # 경계선 표시
-                    "building": False,   # 건물 숨김
-                    "water": True,       # 수계 표시
-                    "land": True,        # 지형 표시
-                    "3d building": False # 3D 건물 숨김
-                },
-                "threeDBuildingColor": [194, 194, 194],
-                "mapStyles": {}
+                    "label": False,
+                    "road": True,
+                    "border": True,
+                    "building": False,
+                    "water": True,
+                    "land": True,
+                    "3d building": False
+                }
             },
             "visState": {
                 "filters": [],
@@ -208,8 +184,7 @@ def create_kepler_map(df_result, address_col):
                         "config": {
                             "dataId": "locations",
                             "label": "위치",
-                            "color": [255, 87, 87],  # 붉은색 포인트
-                            "highlightColor": [252, 242, 26, 255],
+                            "color": [255, 87, 87],
                             "columns": {
                                 "lat": "위도",
                                 "lng": "경도"
@@ -217,37 +192,11 @@ def create_kepler_map(df_result, address_col):
                             "isVisible": True,
                             "visConfig": {
                                 "radius": 8,
-                                "fixedRadius": False,
                                 "opacity": 0.8,
                                 "outline": False,
                                 "thickness": 2,
-                                "strokeColor": None,
-                                "colorRange": {
-                                    "name": "Global Warming",
-                                    "type": "sequential",
-                                    "category": "Uber",
-                                    "colors": ["#5A1846", "#900C3F", "#C70039", "#E3611C", "#F1920E", "#FFC300"]
-                                },
-                                "strokeColorRange": {
-                                    "name": "Global Warming",
-                                    "type": "sequential", 
-                                    "category": "Uber",
-                                    "colors": ["#5A1846", "#900C3F", "#C70039", "#E3611C", "#F1920E", "#FFC300"]
-                                },
-                                "radiusRange": [0, 50],
                                 "filled": True
-                            },
-                            "hidden": False,
-                            "textLabel": [
-                                {
-                                    "field": None,
-                                    "color": [255, 255, 255],
-                                    "size": 18,
-                                    "offset": [0, 0],
-                                    "anchor": "start",
-                                    "alignment": "center"
-                                }
-                            ]
+                            }
                         }
                     }
                 ],
@@ -260,22 +209,13 @@ def create_kepler_map(df_result, address_col):
                                 {"name": "경도", "format": None}
                             ]
                         },
-                        "compareMode": False,
-                        "compareType": "absolute",
                         "enabled": True
-                    },
-                    "brush": {"size": 0.5, "enabled": False},
-                    "geocoder": {"enabled": False},
-                    "coordinate": {"enabled": False}
-                },
-                "layerBlending": "normal",
-                "splitMaps": [],
-                "animationConfig": {"currentTime": None, "speed": 1}
+                    }
+                }
             }
         }
     }
     
-    # Kepler.gl 맵 생성
     kepler_map = KeplerGl(height=600, config=config)
     kepler_map.add_data(data=map_data, name="locations")
     
@@ -285,12 +225,10 @@ def create_kepler_map(df_result, address_col):
 st.title("📍 주소 → 위도/경도 변환기")
 st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 지도에 시각화해드립니다!")
 
-# 파일 업로드
 uploaded_file = st.file_uploader("CSV 파일을 업로드하세요", type=['csv'])
 
 if uploaded_file is not None:
     try:
-        # 구분자 감지 및 파일 읽기
         file_content = uploaded_file.getvalue()
         separator = detect_separator(file_content)
 
@@ -327,13 +265,11 @@ if uploaded_file is not None:
         st.dataframe(df.head())
         st.info(f"총 {len(df)}개 행, {len(df.columns)}개 칼럼")
         
-        # 주소 칼럼 찾기
         address_col = find_address_column(df)
         
         if address_col:
             st.success(f"'{address_col}' 칼럼을 주소로 인식했습니다.")
             
-            # 테스트 실행 버튼
             if st.button("🧪 테스트 실행 (처음 5개)", type="primary"):
                 st.session_state.test_completed = False
                 st.session_state.full_processing = False
@@ -343,7 +279,6 @@ if uploaded_file is not None:
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
-                # 테스트 (처음 5개)
                 st.subheader("🧪 테스트 결과")
                 test_results = []
                 
@@ -367,7 +302,6 @@ if uploaded_file is not None:
                 success_rate = len([r for r in test_results if r['위도']]) / len(test_results) * 100
                 st.metric("테스트 성공률", f"{success_rate:.1f}%")
                 
-                # 테스트 완료 상태 설정
                 st.session_state.test_completed = True
                 st.session_state.test_data = df
                 st.session_state.address_col = address_col
@@ -376,22 +310,18 @@ if uploaded_file is not None:
                 st.subheader("💡 테스트 완료!")
                 st.info(f"전체 {len(df)}개 주소 처리 예상 시간: 약 {len(df)*0.1/60:.1f}분")
             
-            # 테스트 완료 후 전체 처리 버튼 표시
             if st.session_state.test_completed:
                 st.markdown("### 🚀 전체 데이터 처리")
                 
-                # 전체 처리 버튼
                 full_process_btn = st.button(
                     "🚀 전체 데이터 처리 시작", 
                     type="secondary",
-                    key="full_process_button",
-                    help="테스트가 완료된 후 전체 데이터를 처리합니다."
+                    key="full_process_button"
                 )
                 
                 if full_process_btn:
                     st.session_state.full_processing = True
                 
-                # 전체 처리 실행
                 if st.session_state.full_processing and st.session_state.processed_data is None:
                     df = st.session_state.test_data
                     address_col = st.session_state.address_col
@@ -402,7 +332,6 @@ if uploaded_file is not None:
                     df_result['위도'] = None
                     df_result['경도'] = None
                     
-                    # 진행률 표시를 위한 컨테이너
                     progress_container = st.container()
                     with progress_container:
                         progress_bar = st.progress(0)
@@ -410,7 +339,6 @@ if uploaded_file is not None:
                     
                     success_count = 0
                     
-                    # 전체 데이터 처리
                     for idx in range(len(df)):
                         address = df.iloc[idx][address_col]
                         if pd.notna(address):
@@ -429,39 +357,31 @@ if uploaded_file is not None:
                     
                     status_text.text(f"✅ 완료! {success_count}/{len(df)}개 성공 ({success_count/len(df)*100:.1f}%)")
                     
-                    # 결과 저장 (세션 상태에 저장하여 재로딩 방지)
                     st.session_state.processed_data = df_result
                     st.session_state.address_col = address_col
-                    
-                    # Kepler.gl 지도 생성
                     st.session_state.kepler_map = create_kepler_map(df_result, address_col)
                 
-                # 처리 완료 후 결과 표시
                 if st.session_state.processed_data is not None:
                     df_result = st.session_state.processed_data
                     address_col = st.session_state.address_col
                     
-                    # === 🗺️ 지도와 표를 나란히 배치 ===
                     st.markdown("---")
                     st.subheader("📊 최종 결과 - 지도 시각화 및 데이터")
                     
-                    # 2열 레이아웃 생성 (지도:표 = 2:1 비율, 간격 최소화)
                     col_map, col_table = st.columns([2, 1], gap="small")
                     
                     with col_map:
                         st.markdown("### 🗺️ 위치 지도")
                         
-                        # Kepler.gl 지도 표시
                         if st.session_state.kepler_map:
                             keplergl_static(
                                 st.session_state.kepler_map,
                                 height=600,
-                                width=None,  # 컨테이너 너비에 맞춤
+                                width=None,
                                 center_map=False,
                                 read_only=False
                             )
                             
-                            # 지도 통계
                             successful_locations = df_result.dropna(subset=['위도', '경도'])
                             st.info(f"📍 지도에 표시된 위치: {len(successful_locations)}개")
                         else:
@@ -470,7 +390,6 @@ if uploaded_file is not None:
                     with col_table:
                         st.markdown("### 📋 변환 결과")
                         
-                        # CSV 다운로드 버튼을 오른쪽 상단에 배치
                         csv_buffer = io.StringIO()
                         df_result.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
                         
@@ -482,20 +401,16 @@ if uploaded_file is not None:
                             use_container_width=True
                         )
                         
-                        # 결과 표 표시 (스크롤 가능)
                         result_display = df_result[[address_col, '위도', '경도']].copy()
                         result_display.columns = ['주소', '위도', '경도']
-                        
-                        # 주소 텍스트 줄이기 (표시용)
                         result_display['주소'] = result_display['주소'].astype(str).str[:25] + "..."
                         
                         st.dataframe(
                             result_display,
-                            height=450,  # 높이 조정
+                            height=450,
                             use_container_width=True
                         )
                         
-                        # 통계 정보
                         st.markdown("### 📈 변환 통계")
                         total_count = len(df_result)
                         success_count = df_result['위도'].notna().sum()
@@ -509,7 +424,6 @@ if uploaded_file is not None:
                         
                         st.metric("성공률", f"{success_count/total_count*100:.1f}%")
                         
-                        # 실패한 주소 목록 (있는 경우)
                         failed_addresses = df_result[df_result['위도'].isna()]
                         if len(failed_addresses) > 0:
                             with st.expander(f"❌ 변환 실패 주소 ({len(failed_addresses)}개)"):
@@ -529,7 +443,6 @@ if uploaded_file is not None:
         st.error(f"파일 처리 중 오류: {str(e)}")
         st.error("파일 형식을 다시 확인해주세요.")
 
-# 사용법 안내
 with st.expander("📖 사용 방법"):
     st.markdown("""
     ### 🚀 간단한 3단계
@@ -544,12 +457,6 @@ with st.expander("📖 사용 방법"):
     - **미니멀 라이트 스타일**: 도로와 경계선만 표시하는 깔끔한 스타일
     - **실시간 진행률**: 처리 상황 실시간 확인
     - **즉시 다운로드**: 변환 완료 후 바로 CSV 다운로드
-    
-    ### 🗺️ Kepler.gl 지도 기능
-    - **고성능 렌더링**: GPU 가속으로 대용량 데이터도 부드럽게 처리
-    - **인터랙티브 툴팁**: 마커 클릭 시 상세 정보 표시
-    - **줌/팬 기능**: 마우스와 터치로 자유로운 지도 탐색
-    - **미니멀 스타일**: 라벨 없는 라이트 테마로 데이터에 집중
     """)
 
 st.markdown("---")
