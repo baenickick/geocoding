@@ -7,6 +7,9 @@ import csv
 from streamlit_keplergl import keplergl_static
 from keplergl import KeplerGl
 
+pip install streamlit-keplergl keplergl
+
+
 # 페이지 설정
 st.set_page_config(
     page_title="주소 → 좌표 변환기",
