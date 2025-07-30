@@ -10,7 +10,7 @@ from streamlit_folium import st_folium
 # 페이지 설정
 st.set_page_config(
     page_title="GEOCODING TOOL",
-    page_icon="🐱🏁",
+    page_icon="🐱",
     layout="wide"
 )
 
