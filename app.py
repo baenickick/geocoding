@@ -4,8 +4,8 @@ import requests
 import time
 import io
 import csv
-import folium
-from streamlit_folium import st_folium
+from streamlit_keplergl import keplergl_static
+from keplergl import KeplerGl
 
 # 페이지 설정
 st.set_page_config(
@@ -58,6 +58,23 @@ st.markdown("""
     .stSelectbox > div > div > div {
         font-family: 'NanumSquareAc', sans-serif !important;
     }
+    
+    /* 컬럼 간격 조정 */
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* 지도 컨테이너 크기 조정 */
+    .stColumn > div {
+        padding: 0 !important;
+    }
+    
+    /* Kepler.gl 컨테이너 크기 맞춤 */
+    iframe[title="streamlit_keplergl.keplergl_static"] {
+        width: 100% !important;
+        height: 600px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,8 +88,8 @@ if 'full_processing' not in st.session_state:
     st.session_state.full_processing = False
 if 'processed_data' not in st.session_state:
     st.session_state.processed_data = None
-if 'map_data' not in st.session_state:
-    st.session_state.map_data = None
+if 'kepler_map' not in st.session_state:
+    st.session_state.kepler_map = None
 
 def geocode_kakao(address):
     """카카오 API를 사용한 지오코딩"""
@@ -147,42 +164,122 @@ def find_address_column(df):
     
     return None
 
-def create_minimal_map(df_result, address_col):
-    """완전히 안전한 지도 생성"""
-    map_data = df_result.dropna(subset=['위도', '경도'])
+def create_kepler_map(df_result, address_col):
+    """Kepler.gl 지도 생성 (미니멀 스타일)"""
+    map_data = df_result.dropna(subset=['위도', '경도']).copy()
     
     if len(map_data) == 0:
         return None
     
-    center_lat = map_data['위도'].mean() if len(map_data) > 0 else 37.5665
-    center_lon = map_data['경도'].mean() if len(map_data) > 0 else 126.9780
+    # Kepler.gl 설정 (Light 스타일)
+    config = {
+        "version": "v1",
+        "config": {
+            "mapState": {
+                "bearing": 0,
+                "dragRotate": False,
+                "latitude": map_data['위도'].mean(),
+                "longitude": map_data['경도'].mean(),
+                "pitch": 0,
+                "zoom": 7,
+                "isSplit": False
+            },
+            "mapStyle": {
+                "styleType": "light",  # 미니멀한 라이트 스타일[20][23]
+                "topLayerGroups": {},
+                "visibleLayerGroups": {
+                    "label": False,      # 라벨 숨김
+                    "road": True,        # 도로 표시
+                    "border": True,      # 경계선 표시
+                    "building": False,   # 건물 숨김
+                    "water": True,       # 수계 표시
+                    "land": True,        # 지형 표시
+                    "3d building": False # 3D 건물 숨김
+                },
+                "threeDBuildingColor": [194, 194, 194],
+                "mapStyles": {}
+            },
+            "visState": {
+                "filters": [],
+                "layers": [
+                    {
+                        "id": "location_points",
+                        "type": "point",
+                        "config": {
+                            "dataId": "locations",
+                            "label": "위치",
+                            "color": [255, 87, 87],  # 붉은색 포인트
+                            "highlightColor": [252, 242, 26, 255],
+                            "columns": {
+                                "lat": "위도",
+                                "lng": "경도"
+                            },
+                            "isVisible": True,
+                            "visConfig": {
+                                "radius": 8,
+                                "fixedRadius": False,
+                                "opacity": 0.8,
+                                "outline": False,
+                                "thickness": 2,
+                                "strokeColor": None,
+                                "colorRange": {
+                                    "name": "Global Warming",
+                                    "type": "sequential",
+                                    "category": "Uber",
+                                    "colors": ["#5A1846", "#900C3F", "#C70039", "#E3611C", "#F1920E", "#FFC300"]
+                                },
+                                "strokeColorRange": {
+                                    "name": "Global Warming",
+                                    "type": "sequential", 
+                                    "category": "Uber",
+                                    "colors": ["#5A1846", "#900C3F", "#C70039", "#E3611C", "#F1920E", "#FFC300"]
+                                },
+                                "radiusRange": [0, 50],
+                                "filled": True
+                            },
+                            "hidden": False,
+                            "textLabel": [
+                                {
+                                    "field": None,
+                                    "color": [255, 255, 255],
+                                    "size": 18,
+                                    "offset": [0, 0],
+                                    "anchor": "start",
+                                    "alignment": "center"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "interactionConfig": {
+                    "tooltip": {
+                        "fieldsToShow": {
+                            "locations": [
+                                {"name": address_col, "format": None},
+                                {"name": "위도", "format": None},
+                                {"name": "경도", "format": None}
+                            ]
+                        },
+                        "compareMode": False,
+                        "compareType": "absolute",
+                        "enabled": True
+                    },
+                    "brush": {"size": 0.5, "enabled": False},
+                    "geocoder": {"enabled": False},
+                    "coordinate": {"enabled": False}
+                },
+                "layerBlending": "normal",
+                "splitMaps": [],
+                "animationConfig": {"currentTime": None, "speed": 1}
+            }
+        }
+    }
     
-    # 기본 OpenStreetMap 타일 사용 (가장 안정적)
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=7,
-        tiles='OpenStreetMap',
-        zoom_control=True,
-        scrollWheelZoom=True,
-        dragging=True
-    )
+    # Kepler.gl 맵 생성
+    kepler_map = KeplerGl(height=600, config=config)
+    kepler_map.add_data(data=map_data, name="locations")
     
-    # 붉은색 원형 마커 추가
-    for idx, row in map_data.iterrows():
-        folium.CircleMarker(
-            location=[row['위도'], row['경도']],
-            radius=6,
-            popup=f"<b>{str(row[address_col])[:40]}</b><br>위도: {row['위도']:.6f}<br>경도: {row['경도']:.6f}",
-            tooltip=f"{str(row[address_col])[:25]}...",
-            color='#E74C3C',
-            fill=True,
-            fillColor='#C0392B',
-            fillOpacity=0.8,
-            weight=2
-        ).add_to(m)
-    
-    return m
-
+    return kepler_map
 
 # 메인 앱
 st.title("📍 주소 → 위도/경도 변환기")
@@ -241,7 +338,7 @@ if uploaded_file is not None:
                 st.session_state.test_completed = False
                 st.session_state.full_processing = False
                 st.session_state.processed_data = None
-                st.session_state.map_data = None
+                st.session_state.kepler_map = None
                 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -335,34 +432,33 @@ if uploaded_file is not None:
                     # 결과 저장 (세션 상태에 저장하여 재로딩 방지)
                     st.session_state.processed_data = df_result
                     st.session_state.address_col = address_col
+                    
+                    # Kepler.gl 지도 생성
+                    st.session_state.kepler_map = create_kepler_map(df_result, address_col)
                 
-                # 처리 완료 후 결과 표시 (무한 로딩 방지)
+                # 처리 완료 후 결과 표시
                 if st.session_state.processed_data is not None:
                     df_result = st.session_state.processed_data
                     address_col = st.session_state.address_col
                     
-                    # === 🗺️ 지도와 표를 나란히 배치 (비율 조정) ===
+                    # === 🗺️ 지도와 표를 나란히 배치 ===
                     st.markdown("---")
                     st.subheader("📊 최종 결과 - 지도 시각화 및 데이터")
                     
-                    # 2열 레이아웃 생성 (지도 영역을 더 크게)
-                    col_map, col_table = st.columns([2, 1])  # 2:1 비율로 조정
+                    # 2열 레이아웃 생성 (지도:표 = 2:1 비율, 간격 최소화)
+                    col_map, col_table = st.columns([2, 1], gap="small")
                     
                     with col_map:
                         st.markdown("### 🗺️ 위치 지도")
                         
-                        # 지도 생성 (세션에 저장된 데이터 사용)
-                        if st.session_state.map_data is None:
-                            st.session_state.map_data = create_minimal_map(df_result, address_col)
-                        
-                        if st.session_state.map_data:
-                            # 정적 지도로 표시하여 상호작용으로 인한 재로딩 방지
-                            st_folium(
-                                st.session_state.map_data, 
-                                width=900,  # 더 넓게 조정
-                                height=600,  # 더 높게 조정
-                                returned_objects=[],  # 상호작용 데이터 반환 비활성화
-                                key="main_map"  # 고유 키 설정
+                        # Kepler.gl 지도 표시
+                        if st.session_state.kepler_map:
+                            keplergl_static(
+                                st.session_state.kepler_map,
+                                height=600,
+                                width=None,  # 컨테이너 너비에 맞춤
+                                center_map=False,
+                                read_only=False
                             )
                             
                             # 지도 통계
@@ -443,17 +539,19 @@ with st.expander("📖 사용 방법"):
     
     ### ✨ 주요 기능
     - **자동 구분자 감지**: 탭, 쉼표 등 자동 인식
-    - **주소 칼럼 자동 찾기**: '주소', 'address'등 자동 탐지
-    - **미니멀 지도 스타일**: 깔끔한 회색조 지도와 붉은 포인트
+    - **주소 칼럼 자동 찾기**: '주소', 'address' 등 자동 탐지
+    - **Kepler.gl 지도**: GPU 가속 고성능 인터랙티브 지도
+    - **미니멀 라이트 스타일**: 도로와 경계선만 표시하는 깔끔한 스타일
     - **실시간 진행률**: 처리 상황 실시간 확인
     - **즉시 다운로드**: 변환 완료 후 바로 CSV 다운로드
     
-    ### 🗺️ 지도 기능
-    - **미니멀 디자인**: 첨부 이미지와 유사한 깔끔한 스타일
-    - **대화형 마커**: 클릭하면 상세 주소와 좌표 정보 표시
-    - **최적화된 레이아웃**: 넓은 지도 화면으로 데이터 시각화
+    ### 🗺️ Kepler.gl 지도 기능
+    - **고성능 렌더링**: GPU 가속으로 대용량 데이터도 부드럽게 처리
+    - **인터랙티브 툴팁**: 마커 클릭 시 상세 정보 표시
+    - **줌/팬 기능**: 마우스와 터치로 자유로운 지도 탐색
+    - **미니멀 스타일**: 라벨 없는 라이트 테마로 데이터에 집중
     """)
 
 st.markdown("---")
 st.markdown("🏙️ **도시 브랜딩 및 개발 프로젝트를 위한 위치 데이터 변환 및 시각화 도구**")
-st.markdown("by Urban Designer | Powered by Kakao API, Streamlit & Folium")
+st.markdown("by Urban Designer | Powered by Kakao API, Streamlit & Kepler.gl")
