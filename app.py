@@ -14,6 +14,53 @@ st.set_page_config(
     layout="wide"
 )
 
+# 나눔스퀘어 AC 폰트 적용
+st.markdown("""
+<style>
+    @import url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_11-01@1.0/NanumSquareAc.woff2');
+    
+    html, body, [class*="css"]  {
+        font-family: 'NanumSquareAc', sans-serif !important;
+    }
+    
+    .stApp {
+        font-family: 'NanumSquareAc', sans-serif !important;
+    }
+    
+    /* 제목과 헤더 폰트 */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'NanumSquareAc', sans-serif !important;
+        font-weight: 700 !important;
+    }
+    
+    /* 버튼 폰트 */
+    .stButton > button {
+        font-family: 'NanumSquareAc', sans-serif !important;
+        font-weight: 600 !important;
+    }
+    
+    /* 데이터프레임 폰트 */
+    .dataframe {
+        font-family: 'NanumSquareAc', sans-serif !important;
+    }
+    
+    /* 메트릭 폰트 */
+    .metric-container {
+        font-family: 'NanumSquareAc', sans-serif !important;
+    }
+    
+    /* 텍스트 입력 폰트 */
+    .stTextInput > div > div > input {
+        font-family: 'NanumSquareAc', sans-serif !important;
+    }
+    
+    /* 선택박스 폰트 */
+    .stSelectbox > div > div > div {
+        font-family: 'NanumSquareAc', sans-serif !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # 카카오 API 키
 KAKAO_API_KEY = "5d4c572b337634c65d1d65fc68519085"
 
@@ -24,6 +71,8 @@ if 'full_processing' not in st.session_state:
     st.session_state.full_processing = False
 if 'processed_data' not in st.session_state:
     st.session_state.processed_data = None
+if 'map_data' not in st.session_state:
+    st.session_state.map_data = None
 
 def geocode_kakao(address):
     """카카오 API를 사용한 지오코딩"""
@@ -98,8 +147,8 @@ def find_address_column(df):
     
     return None
 
-def create_map(df_result, address_col):
-    """인터랙티브 지도 생성"""
+def create_minimal_map(df_result, address_col):
+    """첨부 이미지 스타일의 미니멀 지도 생성"""
     map_data = df_result.dropna(subset=['위도', '경도'])
     
     if len(map_data) == 0:
@@ -108,29 +157,42 @@ def create_map(df_result, address_col):
     center_lat = map_data['위도'].mean() if len(map_data) > 0 else 37.5665
     center_lon = map_data['경도'].mean() if len(map_data) > 0 else 126.9780
     
+    # 첨부 이미지와 유사한 스타일의 지도 생성
     m = folium.Map(
         location=[center_lat, center_lon],
-        zoom_start=8,
-        tiles=None
+        zoom_start=7,
+        tiles=None,
+        zoom_control=True,
+        scrollWheelZoom=True,
+        dragging=True,
+        attribution_control=False
     )
     
+    # 첨부 이미지와 유사한 미니멀 스타일 타일 (Stamen Toner Light 스타일)
     folium.TileLayer(
-        tiles='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        name="Light Gray",
+        tiles='https://stamen-tiles-{s}.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}{r}.png',
+        attr='Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        name="Minimal Style",
         overlay=False,
-        control=True
+        control=False
     ).add_to(m)
     
+    # 첨부 이미지와 유사한 원형 마커 스타일
     for idx, row in map_data.iterrows():
         folium.CircleMarker(
             location=[row['위도'], row['경도']],
-            radius=6,
-            popup=f"<b>{str(row[address_col])[:50]}</b><br>위도: {row['위도']:.6f}<br>경도: {row['경도']:.6f}",
-            tooltip=str(row[address_col])[:30] + "...",
-            color='#2E86AB',
+            radius=4,  # 더 작은 크기로 조정
+            popup=folium.Popup(
+                f"<div style='font-family: NanumSquareAc, sans-serif; font-size: 12px;'>"
+                f"<b>{str(row[address_col])[:40]}</b><br>"
+                f"위도: {row['위도']:.6f}<br>"
+                f"경도: {row['경도']:.6f}</div>",
+                max_width=200
+            ),
+            tooltip=f"{str(row[address_col])[:25]}...",
+            color='#FF6B6B',  # 붉은 테두리
             fill=True,
-            fillColor='#A23B72',
+            fillColor='#FF4757',  # 붉은 채우기
             fillOpacity=0.8,
             weight=2
         ).add_to(m)
@@ -193,6 +255,8 @@ if uploaded_file is not None:
             if st.button("🧪 테스트 실행 (처음 5개)", type="primary"):
                 st.session_state.test_completed = False
                 st.session_state.full_processing = False
+                st.session_state.processed_data = None
+                st.session_state.map_data = None
                 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -234,7 +298,7 @@ if uploaded_file is not None:
             if st.session_state.test_completed:
                 st.markdown("### 🚀 전체 데이터 처리")
                 
-                # 전체 처리 버튼 (별도 영역에 배치)
+                # 전체 처리 버튼
                 full_process_btn = st.button(
                     "🚀 전체 데이터 처리 시작", 
                     type="secondary",
@@ -246,7 +310,7 @@ if uploaded_file is not None:
                     st.session_state.full_processing = True
                 
                 # 전체 처리 실행
-                if st.session_state.full_processing:
+                if st.session_state.full_processing and st.session_state.processed_data is None:
                     df = st.session_state.test_data
                     address_col = st.session_state.address_col
                     
@@ -283,23 +347,38 @@ if uploaded_file is not None:
                     
                     status_text.text(f"✅ 완료! {success_count}/{len(df)}개 성공 ({success_count/len(df)*100:.1f}%)")
                     
-                    # 결과 저장
+                    # 결과 저장 (세션 상태에 저장하여 재로딩 방지)
                     st.session_state.processed_data = df_result
+                    st.session_state.address_col = address_col
+                
+                # 처리 완료 후 결과 표시 (무한 로딩 방지)
+                if st.session_state.processed_data is not None:
+                    df_result = st.session_state.processed_data
+                    address_col = st.session_state.address_col
                     
-                    # === 🗺️ 지도와 표를 나란히 배치 ===
+                    # === 🗺️ 지도와 표를 나란히 배치 (비율 조정) ===
                     st.markdown("---")
                     st.subheader("📊 최종 결과 - 지도 시각화 및 데이터")
                     
-                    # 2열 레이아웃 생성
-                    col_map, col_table = st.columns([1.2, 1])
+                    # 2열 레이아웃 생성 (지도 영역을 더 크게)
+                    col_map, col_table = st.columns([2, 1])  # 2:1 비율로 조정
                     
                     with col_map:
                         st.markdown("### 🗺️ 위치 지도")
                         
-                        # 지도 생성
-                        map_obj = create_map(df_result, address_col)
-                        if map_obj:
-                            st_folium(map_obj, width=600, height=500)
+                        # 지도 생성 (세션에 저장된 데이터 사용)
+                        if st.session_state.map_data is None:
+                            st.session_state.map_data = create_minimal_map(df_result, address_col)
+                        
+                        if st.session_state.map_data:
+                            # 정적 지도로 표시하여 상호작용으로 인한 재로딩 방지
+                            st_folium(
+                                st.session_state.map_data, 
+                                width=900,  # 더 넓게 조정
+                                height=600,  # 더 높게 조정
+                                returned_objects=[],  # 상호작용 데이터 반환 비활성화
+                                key="main_map"  # 고유 키 설정
+                            )
                             
                             # 지도 통계
                             successful_locations = df_result.dropna(subset=['위도', '경도'])
@@ -327,11 +406,11 @@ if uploaded_file is not None:
                         result_display.columns = ['주소', '위도', '경도']
                         
                         # 주소 텍스트 줄이기 (표시용)
-                        result_display['주소'] = result_display['주소'].astype(str).str[:30] + "..."
+                        result_display['주소'] = result_display['주소'].astype(str).str[:25] + "..."
                         
                         st.dataframe(
                             result_display,
-                            height=400,
+                            height=450,  # 높이 조정
                             use_container_width=True
                         )
                         
@@ -353,10 +432,10 @@ if uploaded_file is not None:
                         failed_addresses = df_result[df_result['위도'].isna()]
                         if len(failed_addresses) > 0:
                             with st.expander(f"❌ 변환 실패 주소 ({len(failed_addresses)}개)"):
-                                for idx, row in failed_addresses.head(10).iterrows():
-                                    st.text(f"• {str(row[address_col])[:50]}")
-                                if len(failed_addresses) > 10:
-                                    st.text(f"... 외 {len(failed_addresses)-10}개 더")
+                                for idx, row in failed_addresses.head(5).iterrows():
+                                    st.text(f"• {str(row[address_col])[:35]}")
+                                if len(failed_addresses) > 5:
+                                    st.text(f"... 외 {len(failed_addresses)-5}개 더")
         else:
             st.error("주소 칼럼을 찾을 수 없습니다.")
             st.info("가능한 칼럼: " + ", ".join(df.columns))
@@ -379,15 +458,15 @@ with st.expander("📖 사용 방법"):
     
     ### ✨ 주요 기능
     - **자동 구분자 감지**: 탭, 쉼표 등 자동 인식
-    - **주소 칼럼 자동 찾기**: '주소', 'address' 등 자동 탐지
-    - **인터랙티브 지도**: 변환된 좌표를 무채색 지도에 시각화
+    - **주소 칼럼 자동 찾기**: '주소', 'address'등 자동 탐지
+    - **미니멀 지도 스타일**: 깔끔한 회색조 지도와 붉은 포인트
     - **실시간 진행률**: 처리 상황 실시간 확인
     - **즉시 다운로드**: 변환 완료 후 바로 CSV 다운로드
     
     ### 🗺️ 지도 기능
-    - **깔끔한 무채색 스타일**: 지역 경계와 도시 라벨만 표시
+    - **미니멀 디자인**: 첨부 이미지와 유사한 깔끔한 스타일
     - **대화형 마커**: 클릭하면 상세 주소와 좌표 정보 표시
-    - **자동 중심점**: 데이터 범위에 맞게 지도 중심 자동 조정
+    - **최적화된 레이아웃**: 넓은 지도 화면으로 데이터 시각화
     """)
 
 st.markdown("---")
