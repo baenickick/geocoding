@@ -25,6 +25,13 @@ h1,h2,h3,h4,h5,h6{font-weight:700!important}
     border: 1px solid #444;
     backdrop-filter: blur(10px);
 }
+
+/* 컬럼 높이 맞춤 */
+.main-container {
+    height: 700px;
+    display: flex;
+    align-items: stretch;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -238,7 +245,7 @@ if up:
         st.markdown("---")
         st.subheader("📊 최종 결과 - 어두운 톤 미니멀 지도 & 데이터")
         
-        # 컬럼 레이아웃
+        # 컬럼 레이아웃 - 높이 맞춤
         col_map, col_table = st.columns([2, 1], gap="small")
         
         with col_map:
@@ -310,7 +317,7 @@ if up:
                 
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            # 지도 표시
+            # 지도 표시 - 높이 고정
             if st.session_state.map_obj:
                 st_folium(st.session_state.map_obj, height=600, width=None, returned_objects=[], key="main_map")
                 
@@ -357,39 +364,41 @@ if up:
                     use_container_width=True
                 )
             
-            # 결과 테이블
+            # 결과 테이블 - 높이를 지도와 맞춤 (600px - 다운로드 버튼 공간)
             result_display = result[[addr_c, '위도', '경도']].copy()
             result_display.columns = ['주소', '위도', '경도']
             result_display['주소'] = result_display['주소'].astype(str).str[:25] + "..."
             
+            # 테이블 높이를 지도 높이에 맞춤
             st.dataframe(
                 result_display,
-                height=450,
+                height=400,  # 지도(600px) - 다운로드 버튼 영역(약 200px) = 400px
                 use_container_width=True
             )
             
-            # 통계 정보
+            # 통계 정보를 컴팩트하게
             st.markdown("### 📈 변환 통계")
             total_count = len(result)
             success_count = result['위도'].notna().sum()
             fail_count = total_count - success_count
             
-            stat_col1, stat_col2 = st.columns(2)
+            # 한 줄에 모든 통계 표시
+            stat_col1, stat_col2, stat_col3 = st.columns(3)
             with stat_col1:
-                st.metric("성공", success_count)
+                st.metric("성공", success_count, delta=None)
             with stat_col2:
-                st.metric("실패", fail_count)
+                st.metric("실패", fail_count, delta=None)
+            with stat_col3:
+                st.metric("성공률", f"{success_count/total_count*100:.1f}%", delta=None)
             
-            st.metric("성공률", f"{success_count/total_count*100:.1f}%")
-            
-            # 실패한 주소 목록
+            # 실패한 주소 목록 - 간소화
             failed_addresses = result[result['위도'].isna()]
             if len(failed_addresses) > 0:
-                with st.expander(f"❌ 변환 실패 주소 ({len(failed_addresses)}개)"):
-                    for idx, row in failed_addresses.head(5).iterrows():
-                        st.text(f"• {str(row[addr_c])[:35]}")
-                    if len(failed_addresses) > 5:
-                        st.text(f"... 외 {len(failed_addresses)-5}개 더")
+                with st.expander(f"❌ 변환 실패 주소 ({len(failed_addresses)}개)", expanded=False):
+                    for idx, row in failed_addresses.head(3).iterrows():
+                        st.text(f"• {str(row[addr_c])[:30]}")
+                    if len(failed_addresses) > 3:
+                        st.text(f"... 외 {len(failed_addresses)-3}개 더")
 
 # 사용법 안내
 with st.expander("📖 사용 방법"):
