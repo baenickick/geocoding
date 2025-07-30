@@ -148,7 +148,7 @@ def find_address_column(df):
     return None
 
 def create_minimal_map(df_result, address_col):
-    """안정적인 미니멀 지도 생성"""
+    """완전히 안전한 지도 생성"""
     map_data = df_result.dropna(subset=['위도', '경도'])
     
     if len(map_data) == 0:
@@ -157,58 +157,32 @@ def create_minimal_map(df_result, address_col):
     center_lat = map_data['위도'].mean() if len(map_data) > 0 else 37.5665
     center_lon = map_data['경도'].mean() if len(map_data) > 0 else 126.9780
     
-    # 안정적인 지도 생성
+    # 기본 OpenStreetMap 타일 사용 (가장 안정적)
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=7,
-        tiles=None,
+        tiles='OpenStreetMap',
         zoom_control=True,
         scrollWheelZoom=True,
-        dragging=True,
-        attribution_control=True
+        dragging=True
     )
-    
-    # 더 안정적인 CartoDB Positron 타일 사용 (미니멀 회색조)
-    folium.TileLayer(
-        tiles='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        name="Light Gray",
-        overlay=False,
-        control=True
-    ).add_to(m)
-    
-    # 대체 타일 추가 (첫 번째가 안 되면 자동으로 두 번째 사용)
-    folium.TileLayer(
-        tiles='OpenStreetMap',
-        name="OpenStreetMap",
-        overlay=False,
-        control=True
-    ).add_to(m)
     
     # 붉은색 원형 마커 추가
     for idx, row in map_data.iterrows():
         folium.CircleMarker(
             location=[row['위도'], row['경도']],
-            radius=5,
-            popup=folium.Popup(
-                f"<div style='font-family: NanumSquareAc, sans-serif; font-size: 12px;'>"
-                f"<b>{str(row[address_col])[:40]}</b><br>"
-                f"위도: {row['위도']:.6f}<br>"
-                f"경도: {row['경도']:.6f}</div>",
-                max_width=200
-            ),
+            radius=6,
+            popup=f"<b>{str(row[address_col])[:40]}</b><br>위도: {row['위도']:.6f}<br>경도: {row['경도']:.6f}",
             tooltip=f"{str(row[address_col])[:25]}...",
-            color='#E74C3C',  # 붉은 테두리
+            color='#E74C3C',
             fill=True,
-            fillColor='#C0392B',  # 붉은 채우기
+            fillColor='#C0392B',
             fillOpacity=0.8,
             weight=2
         ).add_to(m)
     
-    # 레이어 컨트롤 추가 (사용자가 지도 스타일 변경 가능)
-    folium.LayerControl().add_to(m)
-    
     return m
+
 
 # 메인 앱
 st.title("📍 주소 → 위도/경도 변환기")
