@@ -436,4 +436,4 @@ with st.expander("📖 사용 방법"):
 
 st.markdown("---")
 st.markdown("🏙️ **도시 브랜딩 및 개발 프로젝트를 위한 위치 데이터 변환 및 시각화 도구**")
-st.markdown("by Urban Designer | Powered by Kakao API, Streamlit & Folium (Dark Theme)")
+st.markdown("by baenickick ʢᴗ.ᴗʡ | Powered by Kakao API, Streamlit & Folium")
