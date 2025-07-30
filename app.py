@@ -5,7 +5,7 @@ from io import BytesIO
 
 # ────────────────── 1. 페이지 · 폰트 ──────────────────
 st.set_page_config(page_title="GEOCODING TOOL", page_icon="🐱", layout="wide",
-                   initial_sidebar_state="collapsed")   # 기본은 접힘
+                   initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
@@ -15,6 +15,16 @@ h1,h2,h3,h4,h5,h6{font-weight:700!important}
 .stButton>button{font-weight:600!important}
 .block-container{padding-left:1rem;padding-right:1rem}
 .stColumn>div{padding:0!important}
+
+/* 스타일 바 디자인 */
+.style-bar {
+    background: rgba(28, 28, 28, 0.9);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border: 1px solid #444;
+    backdrop-filter: blur(10px);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -23,10 +33,9 @@ KAKAO_API_KEY = "5d4c572b337634c65d1d65fc68519085"
 
 # ────────────────── 3. 세션 상태 ──────────────────
 keys_defaults = {
-    "test_completed": False, "full_processing": False,
-    "processed": None, "map_obj": None,
+    "test_completed": False, "processed": None, "map_obj": None,
     "color_mode": "단일 색상", "marker_color": "#FF4757",
-    "color_col": None, "cmap_name": "Reds"
+    "color_col": None, "cmap_name": "Reds", "marker_size": 6
 }
 for k, v in keys_defaults.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -37,9 +46,12 @@ def geocode(addr:str):
     try:
         r=requests.get(url,headers={"Authorization":f"KakaoAK {KAKAO_API_KEY}"},
                        params={"query":addr},timeout=5)
-        j=r.json()["documents"];  lon,lat=float(j[0]["x"]),float(j[0]["y"])
-        return lat, lon
-    except Exception: return None, None
+        j=r.json()["documents"]
+        if j:
+            lon,lat=float(j[0]["x"]),float(j[0]["y"])
+            return lat, lon
+    except Exception: pass
+    return None, None
 
 def detect_sep(raw:bytes):
     txt=raw.decode(errors="ignore"); seps=['\t',',',';','|','^']; best=','
@@ -61,126 +73,340 @@ def address_col(df):
     return None
 
 def val2hex(val,vmin,vmax,cmap):
-    if vmin==vmax: return "#808080"
+    if pd.isna(val) or vmin==vmax: return "#808080"
     norm=(val-vmin)/(vmax-vmin); norm=max(0,min(1,norm))
     r,g,b=cm.get_cmap(cmap)(norm)[:3]
     return "#{:02X}{:02X}{:02X}".format(int(r*255),int(g*255),int(b*255))
 
 def build_map(df, addr_c):
-    m=folium.Map(location=[df['위도'].mean(),df['경도'].mean()],
+    valid_data = df.dropna(subset=['위도','경도'])
+    if valid_data.empty:
+        return None
+        
+    m=folium.Map(location=[valid_data['위도'].mean(),valid_data['경도'].mean()],
                  zoom_start=7, tiles=None, attribution_control=False)
     folium.TileLayer(
         tiles='https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
         attr='&copy;OSM & CARTO', control=False).add_to(m)
 
     if st.session_state.color_mode=="데이터 기반 색상" and st.session_state.color_col:
-        col=st.session_state.color_col; vmin=df[col].min(); vmax=df[col].max()
+        col=st.session_state.color_col
+        col_data = valid_data[col].dropna()
+        if len(col_data) > 0:
+            vmin, vmax = col_data.min(), col_data.max()
+        else:
+            vmin, vmax = 0, 1
     else:
         col, vmin, vmax = None, None, None
 
-    for _, r in df.dropna(subset=['위도','경도']).iterrows():
-        if col: c=val2hex(r[col],vmin,vmax,st.session_state.cmap_name)
-        else:   c=st.session_state.marker_color
+    for _, r in valid_data.iterrows():
+        if col and not pd.isna(r[col]): 
+            c=val2hex(r[col],vmin,vmax,st.session_state.cmap_name)
+        else:   
+            c=st.session_state.marker_color
         folium.CircleMarker(
-            [r['위도'],r['경도']], radius=6, color=c, fillColor=c,
-            fillOpacity=0.9, tooltip=r[addr_c]).add_to(m)
+            [r['위도'],r['경도']], 
+            radius=st.session_state.marker_size,
+            color=c, fillColor=c, fillOpacity=0.9, weight=2,
+            popup=folium.Popup(
+                f"<b>{str(r[addr_c])[:40]}</b><br>"
+                f"위도: {r['위도']:.6f}<br>"
+                f"경도: {r['경도']:.6f}",
+                max_width=200
+            ),
+            tooltip=f"{str(r[addr_c])[:25]}..."
+        ).add_to(m)
     return m
 
 # ────────────────── 5. UI ──────────────────
 st.title("📍 주소 → 위도·경도 변환기")
-st.write("CSV 올리고 **5개 샘플 테스트 → 전체 변환** 순서로 진행하세요.")
+st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 시각화해드립니다! ʢᴗ.ᴗʡ")
 
-up=st.file_uploader("CSV 업로드",type=["csv"])
+up=st.file_uploader("CSV 파일을 업로드하세요",type=["csv"])
 if up:
     raw=up.getvalue(); sep=detect_sep(raw)
     try: df=pd.read_csv(io.BytesIO(raw),sep=sep,encoding='utf-8')
     except UnicodeDecodeError: df=pd.read_csv(io.BytesIO(raw),sep=sep,encoding='cp949')
 
     addr_c=address_col(df)
-    if not addr_c: st.error("주소 칼럼을 찾지 못했습니다."); st.stop()
+    if not addr_c: 
+        st.error("주소 칼럼을 찾을 수 없습니다.")
+        st.info("가능한 칼럼: " + ", ".join(df.columns))
+        st.stop()
 
-    st.subheader("샘플 미리보기")
+    st.subheader("📋 업로드된 데이터")
     st.dataframe(df.head())
-    st.info(f"인식된 주소 칼럼: **{addr_c}** / 총 {len(df)}행")
+    st.info(f"'{addr_c}' 칼럼을 주소로 인식했습니다. | 총 {len(df)}개 행, {len(df.columns)}개 칼럼")
 
     # ── 5개 샘플 테스트 ──
-    if st.button("🧪 샘플 5개 테스트"):
+    if st.button("🧪 테스트 실행 (처음 5개)", type="primary"):
+        st.session_state.test_completed = False
+        st.session_state.processed = None
+        st.session_state.map_obj = None
+        
+        st.subheader("🧪 테스트 결과")
         test_res=[]
         bar=st.progress(0)
-        for i in range(5):
-            a=df.iloc[i][addr_c]; lat,lon=geocode(str(a))
-            test_res.append([a,lat,lon])
-            bar.progress((i+1)/5)
-        st.table(pd.DataFrame(test_res,columns=['주소','위도','경도']))
-        succ=sum(pd.notna(x[1]) for x in test_res)
-        st.metric("테스트 성공률",f"{succ/5*100:.1f}%")
-        est=f"{len(df)*0.05/60:.1f} 분"
-        st.info(f"전체 처리 예상 소요: 약 **{est}**")
-
+        status_text = st.empty()
+        
+        for i in range(min(5, len(df))):
+            addr = df.iloc[i][addr_c]
+            if pd.notna(addr):
+                status_text.text(f"테스트 중: {addr}")
+                lat,lon=geocode(str(addr))
+                test_res.append({
+                    '주소': str(addr)[:50],
+                    '위도': lat,
+                    '경도': lon,
+                    '상태': '✅ 성공' if lat else '❌ 실패'
+                })
+                bar.progress((i+1)/5)
+                time.sleep(0.1)
+        
+        test_df = pd.DataFrame(test_res)
+        st.dataframe(test_df)
+        
+        success_count = len([r for r in test_res if r['위도']])
+        success_rate = success_count / len(test_res) * 100
+        st.metric("테스트 성공률", f"{success_rate:.1f}%")
+        
+        # 더 정확한 예상 시간 계산
+        avg_time_per_request = 0.1  # 초당 처리 시간
+        total_estimated_time = len(df) * avg_time_per_request
+        if total_estimated_time < 60:
+            time_str = f"{total_estimated_time:.0f}초"
+        else:
+            time_str = f"{total_estimated_time/60:.1f}분"
+        
         st.session_state.test_completed=True
         st.session_state.test_data=df.copy()
         st.session_state.addr_col=addr_c
+        
+        st.markdown("---")
+        st.subheader("💡 테스트 완료!")
+        st.info(f"전체 {len(df)}개 주소 처리 예상 시간: 약 **{time_str}**")
 
     # ── 전체 데이터 처리 ──
-    if st.session_state.test_completed and st.button("🚀 전체 데이터 처리"):
-        d=st.session_state.test_data
-        bar=st.progress(0); status=st.empty()
-        for i,a in enumerate(d[addr_c]):
-            lat,lon=geocode(str(a))
-            d.at[i,'위도'],d.at[i,'경도']=lat,lon
-            if i%50==0 or i<10: status.text(f"{i+1}/{len(d)} 처리 중...")
-            bar.progress((i+1)/len(d))
-            time.sleep(0.02)
-        st.success("전체 지오코딩 완료!")
-        st.session_state.processed=d
-        st.session_state.map_obj=None      # 새 지도 필요
+    if st.session_state.test_completed:
+        st.markdown("### 🚀 전체 데이터 처리")
+        
+        if st.button("🚀 전체 데이터 처리 시작", type="secondary"):
+            df = st.session_state.test_data
+            addr_c = st.session_state.addr_col
+            
+            st.markdown("### 📊 전체 데이터 처리 중...")
+            
+            df_result = df.copy()
+            df_result['위도'] = None
+            df_result['경도'] = None
+            
+            bar=st.progress(0)
+            status=st.empty()
+            success_count = 0
+            
+            for i in range(len(df)):
+                addr = df.iloc[i][addr_c]
+                if pd.notna(addr):
+                    if i % 50 == 0 or i < 10:
+                        status.text(f"처리 중 {i+1}/{len(df)}: {str(addr)[:30]}...")
+                    
+                    lat,lon=geocode(str(addr))
+                    df_result.at[i,'위도'] = lat
+                    df_result.at[i,'경도'] = lon
+                    
+                    if lat:
+                        success_count += 1
+                    
+                    bar.progress((i+1)/len(df))
+                    time.sleep(0.05)
+            
+            status.text(f"✅ 완료! {success_count}/{len(df)}개 성공 ({success_count/len(df)*100:.1f}%)")
+            
+            st.session_state.processed=df_result
+            st.session_state.addr_col=addr_c
+            st.session_state.map_obj=None
 
     # ── 지도 & 결과 영역 ──
     if st.session_state.processed is not None:
         result=st.session_state.processed
+        addr_c = st.session_state.addr_col
 
         # 지도 없으면 생성
         if st.session_state.map_obj is None:
-            st.session_state.map_obj=build_map(result, st.session_state.addr_col)
+            st.session_state.map_obj=build_map(result, addr_c)
 
+        st.markdown("---")
+        st.subheader("📊 최종 결과 - 어두운 톤 미니멀 지도 & 데이터")
+        
         # 컬럼 레이아웃
-        col_map,col_opt,col_tbl=st.columns([5,1,4],gap="small")
+        col_map, col_table = st.columns([2, 1], gap="small")
+        
         with col_map:
-            st_folium(st.session_state.map_obj,height=600,width=None,returned_objects=[])
-
-        # ⚙️ 스타일 버튼 → Expander
-        with col_opt:
-            with st.expander("⚙️ 스타일"):
-                st.session_state.color_mode=st.radio("색상 모드",
-                                                     ["단일 색상","데이터 기반 색상"],
-                                                     index=0)
-                if st.session_state.color_mode=="단일 색상":
-                    st.session_state.marker_color=st.color_picker(
-                        "마커 색",st.session_state.marker_color)
-                else:
-                    num_cols=[c for c in result.select_dtypes(np.number).columns
-                              if c not in ['위도','경도']]
-                    if num_cols:
-                        st.session_state.color_col=st.selectbox("기준 칼럼",num_cols)
-                        st.session_state.cmap_name=st.selectbox(
-                            "컬러맵",["Reds","Blues","Greens","Viridis","Plasma","coolwarm"])
+            st.markdown("### 🌃 위치 지도 (Dark Theme)")
+            
+            # 지도 상단에 얇은 스타일 바 추가
+            with st.container():
+                st.markdown('<div class="style-bar">', unsafe_allow_html=True)
+                
+                # 한 줄에 모든 컨트롤 배치
+                style_col1, style_col2, style_col3, style_col4, style_col5 = st.columns([2, 2, 2, 2, 1])
+                
+                with style_col1:
+                    new_color_mode = st.selectbox(
+                        "색상 모드", 
+                        ["단일 색상", "데이터 기반 색상"],
+                        index=0 if st.session_state.color_mode == "단일 색상" else 1,
+                        key="color_mode_select"
+                    )
+                    if new_color_mode != st.session_state.color_mode:
+                        st.session_state.color_mode = new_color_mode
+                        st.rerun()
+                
+                with style_col2:
+                    if st.session_state.color_mode == "단일 색상":
+                        new_color = st.color_picker(
+                            "마커 색상", 
+                            st.session_state.marker_color,
+                            key="marker_color_picker"
+                        )
+                        if new_color != st.session_state.marker_color:
+                            st.session_state.marker_color = new_color
                     else:
-                        st.warning("숫자형 칼럼이 없습니다. 단일 색상으로 전환됩니다.")
-                        st.session_state.color_mode="단일 색상"
+                        num_cols = [c for c in result.select_dtypes(np.number).columns
+                                   if c not in ['위도','경도']]
+                        if num_cols:
+                            new_col = st.selectbox("기준 칼럼", num_cols, key="color_col_select")
+                            if new_col != st.session_state.color_col:
+                                st.session_state.color_col = new_col
+                        else:
+                            st.warning("숫자형 칼럼 없음")
+                            st.session_state.color_mode = "단일 색상"
+                
+                with style_col3:
+                    if st.session_state.color_mode == "데이터 기반 색상":
+                        new_cmap = st.selectbox(
+                            "컬러맵",
+                            ["Reds","Blues","Greens","Viridis","Plasma","coolwarm","RdYlBu"],
+                            index=["Reds","Blues","Greens","Viridis","Plasma","coolwarm","RdYlBu"].index(st.session_state.cmap_name),
+                            key="cmap_select"
+                        )
+                        if new_cmap != st.session_state.cmap_name:
+                            st.session_state.cmap_name = new_cmap
+                
+                with style_col4:
+                    new_size = st.slider(
+                        "마커 크기", 
+                        min_value=3, max_value=15, 
+                        value=st.session_state.marker_size,
+                        key="marker_size_slider"
+                    )
+                    if new_size != st.session_state.marker_size:
+                        st.session_state.marker_size = new_size
+                
+                with style_col5:
+                    if st.button("🎨 적용", key="apply_style"):
+                        st.session_state.map_obj = build_map(result, addr_c)
+                        st.rerun()
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # 지도 표시
+            if st.session_state.map_obj:
+                st_folium(st.session_state.map_obj, height=600, width=None, returned_objects=[], key="main_map")
+                
+                successful_locations = result.dropna(subset=['위도', '경도'])
+                if st.session_state.color_mode == "데이터 기반 색상" and st.session_state.color_col:
+                    color_values = successful_locations[st.session_state.color_col].dropna()
+                    if len(color_values) > 0:
+                        st.info(f"🎨 색상 기준: {st.session_state.color_col} (범위: {color_values.min():.2f} ~ {color_values.max():.2f}) | 📍 표시된 위치: {len(successful_locations)}개")
+                    else:
+                        st.info(f"🔴 지도에 표시된 위치: {len(successful_locations)}개")
+                else:
+                    st.info(f"🔴 지도에 표시된 위치: {len(successful_locations)}개")
+            else:
+                st.warning("표시할 위치 데이터가 없습니다.")
 
-                if st.button("🎨 적용"):
-                    st.session_state.map_obj=build_map(result, st.session_state.addr_col)
+        with col_table:
+            st.markdown("### 📋 변환 결과")
+            
+            # 다운로드 버튼들을 수평으로 배치
+            dl_col1, dl_col2 = st.columns(2)
+            
+            with dl_col1:
+                # CSV 다운로드
+                csv_buffer = io.StringIO()
+                result.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+                st.download_button(
+                    label="📄 CSV 다운로드",
+                    data=csv_buffer.getvalue().encode('utf-8-sig'),
+                    file_name="geocoded_addresses.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
+            with dl_col2:
+                # Excel 다운로드
+                excel_buffer = BytesIO()
+                with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                    result.to_excel(writer, sheet_name='지오코딩결과', index=False)
+                st.download_button(
+                    label="📊 Excel 다운로드",
+                    data=excel_buffer.getvalue(),
+                    file_name="geocoded_addresses.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            
+            # 결과 테이블
+            result_display = result[[addr_c, '위도', '경도']].copy()
+            result_display.columns = ['주소', '위도', '경도']
+            result_display['주소'] = result_display['주소'].astype(str).str[:25] + "..."
+            
+            st.dataframe(
+                result_display,
+                height=450,
+                use_container_width=True
+            )
+            
+            # 통계 정보
+            st.markdown("### 📈 변환 통계")
+            total_count = len(result)
+            success_count = result['위도'].notna().sum()
+            fail_count = total_count - success_count
+            
+            stat_col1, stat_col2 = st.columns(2)
+            with stat_col1:
+                st.metric("성공", success_count)
+            with stat_col2:
+                st.metric("실패", fail_count)
+            
+            st.metric("성공률", f"{success_count/total_count*100:.1f}%")
+            
+            # 실패한 주소 목록
+            failed_addresses = result[result['위도'].isna()]
+            if len(failed_addresses) > 0:
+                with st.expander(f"❌ 변환 실패 주소 ({len(failed_addresses)}개)"):
+                    for idx, row in failed_addresses.head(5).iterrows():
+                        st.text(f"• {str(row[addr_c])[:35]}")
+                    if len(failed_addresses) > 5:
+                        st.text(f"... 외 {len(failed_addresses)-5}개 더")
 
-        with col_tbl:
-            st.subheader("결과 데이터")
-            st.dataframe(result[[st.session_state.addr_col,'위도','경도']],
-                         use_container_width=True,height=600)
-            # ── 다운로드 ──
-            csv= result.to_csv(index=False,encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("⬇️ CSV",csv,"geocoded.csv",mime="text/csv")
-            xls_buf=BytesIO()
-            with pd.ExcelWriter(xls_buf,engine="openpyxl") as w:
-                result.to_excel(w,index=False,sheet_name="Geocoding")
-            st.download_button("⬇️ Excel",xls_buf.getvalue(),
-                               "geocoded.xlsx",
-                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+# 사용법 안내
+with st.expander("📖 사용 방법"):
+    st.markdown("""
+    ### 🚀 간단한 3단계
+    1. **CSV 파일 업로드**: 주소가 포함된 CSV 파일 선택
+    2. **테스트 실행**: 처음 5개 주소로 정상 작동 확인
+    3. **전체 처리**: 테스트 성공 후 전체 데이터 변환 및 지도 시각화
+    
+    ### ✨ 주요 기능
+    - **자동 구분자 감지**: 탭, 쉼표 등 자동 인식
+    - **주소 칼럼 자동 찾기**: '주소', 'address' 등 자동 탐지
+    - **어두운 톤 미니멀 지도**: 도로와 경계선만 표시하는 세련된 다크 테마
+    - **실시간 스타일 조정**: 색상, 크기 등을 지도 위에서 바로 변경
+    - **실시간 진행률**: 처리 상황 실시간 확인
+    - **CSV & Excel 다운로드**: 한글 깨짐 없는 완벽한 파일 저장
+    """)
+
+st.markdown("---")
+st.markdown("by baenickick ʢᴗ.ᴗʡ | Powered by Kakao API, Streamlit & Folium")
