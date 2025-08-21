@@ -109,7 +109,7 @@ def build_map(df, addr_c):
     return m
 
 # ────────────────── 5. UI ──────────────────
-st.title("📍 주소 → 위도·경도 변환기 by 서현")
+st.title("📍 주소 → 위도·경도 변환기")
 st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 시각화해드립니다! ⸜(๑'ᵕ'๑)⸝ ")
 
 up=st.file_uploader("CSV 파일을 업로드하세요",type=["csv"])
@@ -413,7 +413,7 @@ if up:
 # 사용법 안내
 with st.expander("📖 사용 방법"):
     st.markdown("""
-    ### 🚀 간단한 3단계
+    ### 🚀 사용 방법 3단계
     1. **CSV 파일 업로드**: 주소가 포함된 CSV 파일 선택
     2. **테스트 실행**: 처음 5개 주소로 정상 작동 확인
     3. **전체 처리**: 테스트 성공 후 전체 데이터 변환 및 지도 시각화
@@ -421,11 +421,11 @@ with st.expander("📖 사용 방법"):
     ### ✨ 주요 기능
     - **자동 구분자 감지**: 탭, 쉼표 등 자동 인식
     - **주소 칼럼 자동 찾기**: '주소', 'address' 등 자동 탐지
-    - **어두운 톤 미니멀 지도**: 도로와 경계선만 표시하는 세련된 다크 테마
+    - **어두운 톤 미니멀 지도**: 도로와 경계선만 표시하는 다크 테마 지도 시각화
     - **실시간 스타일 조정**: 색상, 크기 등을 지도 아래에서 바로 변경
-    - **실시간 진행률**: 처리 상황 실시간 확인
-    - **CSV & Excel 다운로드**: 한글 깨짐 없는 완벽한 파일 저장
+    - **실시간 진행률**: 처리 상황 실시간 확인!
+    - **CSV & Excel 다운로드**: 한글 깨짐 없는 완벽한 파일 저장 
     """)
 
 st.markdown("---")
-st.markdown("by baenickick ʢᴗ.ᴗʡ | Powered by Kakao API, Streamlit & Folium")
+st.markdown("by 배서현 baenickick ʢᴗ.ᴗʡ | Powered by Kakao API, Streamlit & Folium")
