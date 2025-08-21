@@ -109,8 +109,8 @@ def build_map(df, addr_c):
     return m
 
 # ────────────────── 5. UI ──────────────────
-st.title("📍 주소 → 위도·경도 변환기")
-st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 시각화해드립니다! ʢᴗ.ᴗʡ")
+st.title("📍 주소 → 위도·경도 변환기 by 서현")
+st.markdown("CSV 파일을 업로드하면 주소를 위도/경도로 자동 변환하고 시각화해드립니다! ⸜(๑'ᵕ'๑)⸝ ")
 
 up=st.file_uploader("CSV 파일을 업로드하세요",type=["csv"])
 if up:
